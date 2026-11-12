@@ -1,0 +1,121 @@
+---
+title: "miniproject_26210145.Rmd"
+output: html_document
+date: "2026-11-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+#1a
+getwd()
+setwd("~/project2")
+library(tximport)
+library(DESeq2)
+library(readr)
+library(Biostrings)
+library(ggplot2)
+library(pheatmap)
+counts <- read.csv(airway_counts.csv", row.names = 1)
+samples <- read.csv(airway_samples.csv")
+str(samples)
+#1b
+lib_size %>%
+  group_by(Group) %>%
+  summarize(
+    mean_expression = mean(Gene_expression),
+    mean_viability = mean(Cell_viability),
+    n = n()
+  )
+#1c
+ggplot(lib_size, aes(x = gene, y = expression)) +
+  geom_col()
+expression_viability_plot <- ggplot(lib_size, aes(x = Gene_expression, y = Cell_viability, color = Group)) +
+  geom_point(size = 3) +
+  labs(
+    title = "Cell Viability vs. Gene Expression",
+    subtitle = "Control vs. Drug-treated samples",
+    x = "Gene Expression Level",
+    y = "Cell Viability (%)",
+    caption = "n = 12 samples, 6 per group"
+  )
+expression_viability_plot
+
+#2a
+rownames(samples) <- samples$run
+dds <- DESeqDataSetFromMatrix(countData = as.matrix(counts),
+                              colData = samples, design = ~ group)
+levels(dds$group)
+#2b
+keep <- rowSums(counts(dds) >= 10) >=2
+dds <- dds[keep, ]
+nrow(dds)
+#2c
+vsd <- vst(dds, blind = TRUE)
+dir.create("plots", showWarnings = FALSE)
+
+p_pca <- plotPCA(vsd, intgroup = "group")
+p_pca
+#3a
+dds <- DESeq(dds)
+write.csv(counts(dds, normalized = TRUE), "results/normalized_counts.csv", qu
+          ote = FALSE)
+#3b
+res <- results(dds, contrast = c("group", "trt", "untrt"))
+head(res)
+res <- res[order(res$padj), ]
+res_df <- as.data.frame(res)
+res_df$gene <- rownames(res_df)
+res_df$status <- "Not significant"
+res_df$status[res_df$padj < 0.05 & res_df$log2FoldChange >= 1] <- "Up"
+res_df$status[res_df$padj < 0.05 & res_df$log2FoldChange <= -1] <- "Down"
+table(res_df$status)
+#3c
+write.csv(res_df, paste0("results/", comparison, "_all_genes.csv"), row.names = FALSE)
+write.csv(degs, paste0("results/", comparison, "_DEGs.csv"), row.names = FALSE)
+deg_table <- read.csv(paste0("results/", comparison, "_DEGs.csv"))
+head(deg_table, 5)
+#3d
+# 1. We give DESeq2 raw counts and not normalised counts because it can estimate size factor and dispersion internally to fit a negative binomial model
+# 2. Some genes have padj = NA because gene with low counts are left out
+# 3. A gene has log2FC = 3, it means that the treated count is 2 ^3 times more than untreated count
+# 4a
+volcano_data <- res_df[!is.na(res_df$padj), ] # remove genes with padj = N
+A
+p_volcano <- ggplot(volcano_data,
+                    aes(x = log2FoldChange, y = -log10(padj), color = status)) +
+  geom_point(alpha = 0.6) +
+  scale_color_manual(values = c("Up" = "firebrick",
+                                "Down" = "steelblue",
+                                "Not significant" = "grey70")) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed") +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+  labs(title = trt_vs_untrt,
+       x = "log2 fold change",
+       y = "-log10 adjusted p-value") +
+  theme_bw()
+p_volcano
+ggsave(paste0("plots/volcano_", comparison, ".png"), p_volcano,
+       width = 6, height = 5, dpi = 300)
+#4b
+
